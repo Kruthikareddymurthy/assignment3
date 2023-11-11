@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .side-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>MAJOR ASSIGNMENT 3</h1>
+    <div>
+        <form id="control-form">
+            <label>Link Strength:
+                <input type="range" id="link-strength" min="0" max="1" step="1" value="1">
+                <span id="link-strength-value">0.7</span>
+            </label>
+            <br>
+            <label>Collide Force:
+                <input type="range" id="collide-force" min="0" max="100" step="1" value="30">
+                <span id="collide-force-value">30</span>
+            </label>
+            <br>
+            <label>Charge Force:
+                <input type="range" id="charge-force" min="-100" max="0" step="1" value="-30">
+                <span id="charge-force-value">-30</span>
+            </label>
+            <br>
+            <label>Node Size:
+                <input type="radio" name="node-size" value="citations" checked> Citations
+                <input type="radio" name="node-size" value="publications"> Publications
+                
+            </label>
+        </form>
+        </div>
+        <div class="side-panel" id="side-panel">
+            <h3>Author Details</h3>
+            <p id="author-details">Click on a node to view details.</p>
+        </div>
+    <script>
+       
+        d3.json('https://raw.githubusercontent.com/Kruthikareddymurthy/assignment3/main/output.json').then(function(graph) {
+            // Defining a color scale 
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+            
+            // Creating force simulation for nodes
+            const simulation = d3.forceSimulation(graph.nodes)
+                .force('charge', d3.forceManyBody().strength(-1)) 
+                .force('collision', d3.forceCollide().radius(d => Math.sqrt(d.citations) * 2))
+                .force('radial', d3.forceRadial(50, 400, 300));
+
+            // Creating SVG container
+            const svg = d3.select('body').append('svg')
+                .attr('width', 1000)
+                .attr('height', 800);
+                const tooltip = d3.select('body').append('div')
+        .attr('class', 'tooltip')
+        .style('opacity', 0);
+            
+            // creating the links
+            const link = svg.selectAll('.link')
+                .data(graph.links)
+                .enter().append('line')
+                .attr('class', 'link')
+                .attr('stroke', 'grey'); 
+
+            // creating the nodes
+            const node = svg.selectAll('.node')
+                .data(graph.nodes)
+                .enter().append('circle')
+                .attr('class', 'node')
+                .attr('r', d => Math.sqrt(d.citations)) // the node size is set based on the citations
+                .attr('fill', d => color(d.country))  // the color of the node is set based on the country
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended))
+                    .on('mouseover', mouseover)
+                .on('mouseout', mouseout);
+            
+            // tooltip for nodes
+            node.append('title')
+                .text(d => `Author: ${d.id}\nCountry: ${d.country}\nCluster: ${d.cluster}\nCitations: ${d.citations}\nNumber of publications: ${d.number_of_publications}`);
+
+            // simulation
+            simulation
+                .on('tick', () => {
+                    link
+                        .attr('x1', d => d.source.x)
+                        .attr('y1', d => d.source.y)
+                        .attr('x2', d => d.target.x)
+                        .attr('y2', d => d.target.y);
+
+                    node
+                        .attr('cx', d => d.x)
+                        .attr('cy', d => d.y);
+                });
+                simulation.force('link', d3.forceLink(graph.links).id(d => d.id));
+
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.2).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+            function zoomed(event) {
+                svg.attr('transform', event.transform);
+            }
+
+            function mouseover(event, d) {
+                d3.select(this).attr('r', d => Math.sqrt(d.citations) * 2 * 1.5);
+
+    // tool tip transition
+    tooltip.transition()
+        .duration(200)
+        .style('opacity', .9);
+    tooltip.html(`Author: ${d.id}<br>Country: ${d.country}<br>Cluster: ${d.cluster}<br>Citations: ${d.citations}<br>Number of publications: ${d.number_of_publications}`)
+        .style('left', (event.pageX) + 'px')
+        .style('top', (event.pageY - 28) + 'px');
+            }
+
+            function mouseout(event, d) {
+                d3.select(this).attr('r', d => Math.sqrt(d.citations) * 2);
+
+    // Hide the tooltip
+    tooltip.transition()
+        .duration(500)
+        .style('opacity', 0);
+            }
+            
+            const linkStrengthInput = document.getElementById('link-strength');
+            const linkStrengthValue = document.getElementById('link-strength-value');
+            linkStrengthInput.addEventListener('input', updateLinkStrength);
+
+            const collideForceInput = document.getElementById('collide-force');
+            const collideForceValue = document.getElementById('collide-force-value');
+            collideForceInput.addEventListener('input', updateCollideForce);
+
+            const chargeForceInput = document.getElementById('charge-force');
+            const chargeForceValue = document.getElementById('charge-force-value');
+            chargeForceInput.addEventListener('input', updateChargeForce);
+
+            const nodeSizeInputs = document.getElementsByName('node-size');
+            nodeSizeInputs.forEach(input => input.addEventListener('change', updateNodeSize));
+
+            
+            node.on('click', showAuthorDetails);
+            function updateLinkStrength() {
+                const value = linkStrengthInput.value;
+                linkStrengthValue.textContent = value;
+                simulation.force('link').strength(value);
+                simulation.alpha(1).restart();
+            }
+
+            function updateCollideForce() {
+                const value = collideForceInput.value;
+                collideForceValue.textContent = value;
+                simulation.force('collision').radius(d => Math.sqrt(d.Citations) * 2 + parseInt(value));
+                simulation.alpha(1).restart();
+            }
+
+            function updateChargeForce() {
+                const value = chargeForceInput.value;
+                chargeForceValue.textContent = value;
+                simulation.force('charge').strength(parseInt(value));
+                simulation.alpha(1).restart();
+            }
+            function updateNodeSize() {
+                const selectedSizeInput = Array.from(nodeSizeInputs).find(input => input.checked);
+                const selectedSize = selectedSizeInput ? selectedSizeInput.value : 'citations';
+                // Update the node size based on the selected option i.e publication or citations
+                node.attr('r', d => {
+                    if (selectedSize === 'publications') return Math.sqrt(d.number_of_publications) * 2;
+
+                    return Math.sqrt(d.Citations) * 2;
+                });
+            }
+
+            function showAuthorDetails(event, d) {
+                // Display author details in the side panel when clicked on the node
+                const sidePanel = document.getElementById('side-panel');
+                const authorDetails = document.getElementById('author-details');
+                authorDetails.textContent = `Author: ${d.id}\nCountry: ${d.country}\nCluster: ${d.cluster}\nCitations: ${d.citations}\nNumber of publications: ${d.number_of_publications}`;
+                sidePanel.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
